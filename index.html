@@ -1,0 +1,854 @@
+<!doctype html>
+<html lang="zh-Hant-HK">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root { color-scheme: light; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+</style>
+<title>Open Call 雷達</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Mono:wght@500;600&family=Noto+Sans+HK:wght@400;500;700;900&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/fuse.js/7.0.0/fuse.min.js"></script>
+<style>
+/* Layout: minimal white, one centred search column, Google-style; pink only on 雷達 */
+:root {
+  --paper: #FFFFFF;
+  --card: #FFFFFF;
+  --ink: #111111;
+  --muted: #6B6B6B;
+  --line: #E4E4E4;
+  --pink: #D92F86;
+  --pink-soft: #FBE1EE;
+  --blue: #1A4FBF;
+  --url: #4D5156;
+  --shadow: rgba(0, 0, 0, .12);
+  --chip: #F0F0F0;
+  --font-display: "Bricolage Grotesque", "Noto Sans HK", system-ui, sans-serif;
+  --font-body: "Noto Sans HK", "PingFang HK", "Microsoft JhengHei", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #111111; --card: #1A1A1A; --ink: #EDEDED; --muted: #9A9A9A; --line: #2C2C2C;
+    --pink: #FF5FAA; --pink-soft: #3A1A2B; --blue: #8AB4F8; --url: #B0B0B0; --shadow: rgba(0, 0, 0, .6); --chip: #2C2C2C;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #111111; --card: #1A1A1A; --ink: #EDEDED; --muted: #9A9A9A; --line: #2C2C2C;
+  --pink: #FF5FAA; --pink-soft: #3A1A2B; --blue: #8AB4F8; --url: #B0B0B0; --shadow: rgba(0, 0, 0, .6); --chip: #2C2C2C;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.6;
+}
+.wrap {
+  max-width: 720px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 56px;
+}
+input, button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+/* ---------- hero ---------- */
+.hero {
+  display: flex; flex-direction: column; align-items: center; gap: 22px;
+  padding-top: clamp(56px, 16vh, 150px); transition: padding-top .25s ease;
+}
+body.searching .hero { padding-top: 28px; }
+.brand { display: flex; align-items: center; gap: 14px; }
+.radar {
+  width: 46px; height: 46px; flex: none; border-radius: 50%; position: relative; overflow: hidden;
+  background:
+    radial-gradient(circle, transparent 0 30%, var(--line) 30% 32%, transparent 32% 62%, var(--line) 62% 64%, transparent 64%),
+    var(--card);
+  border: 1.5px solid var(--ink);
+}
+.radar::before {
+  content: ""; position: absolute; inset: 0; border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 0 290deg, color-mix(in srgb, var(--pink) 55%, transparent) 360deg);
+  animation: sweep 3.2s linear infinite;
+}
+.radar::after {
+  content: ""; position: absolute; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--pink); top: 11px; left: 27px;
+}
+@keyframes sweep { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .radar::before { animation: none; } .hero { transition: none; } }
+h1 {
+  margin: 0; line-height: 1.05; font-size: clamp(30px, 7vw, 46px); letter-spacing: -0.01em;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 0 .28em;
+}
+h1 .en { font-family: var(--font-display); font-weight: 800; }
+h1 .zh { font-family: var(--font-body); font-weight: 900; color: var(--pink); }
+h1 .hk {
+  font-family: var(--font-display); font-weight: 800; font-size: .42em; letter-spacing: .06em;
+  color: var(--ink); border: 2px solid var(--ink); border-radius: 6px; padding: .12em .38em; align-self: flex-start;
+  margin-top: .2em;
+}
+
+/* ---------- search + suggestions ---------- */
+.search { position: relative; width: 100%; }
+.search input {
+  width: 100%; padding: 14px 18px 14px 48px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--card); font-size: 17px; transition: box-shadow .15s, border-color .15s;
+}
+.search input:hover, .search input:focus {
+  outline: none; border-color: transparent; box-shadow: 0 1px 8px var(--shadow);
+}
+.search > svg { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); width: 19px; height: 19px; stroke: var(--muted); }
+
+.suggest {
+  position: absolute; left: 0; right: 0; top: calc(100% + 8px); z-index: 20;
+  background: var(--card); border: 1px solid var(--line); border-radius: 18px;
+  box-shadow: 0 14px 34px var(--shadow); padding: 6px; max-height: min(60vh, 440px); overflow-y: auto;
+}
+.sg-head {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .08em; padding: 8px 12px 4px;
+}
+.sg-head button { border: 0; background: none; color: var(--blue); font-size: 12.5px; font-weight: 500; cursor: pointer; padding: 2px 4px; }
+.sg-item {
+  display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 12px;
+  cursor: pointer; color: var(--ink); text-decoration: none; min-width: 0;
+}
+.sg-item:hover, .sg-item[aria-selected="true"] { background: var(--paper); }
+.sg-icon { width: 18px; height: 18px; flex: none; color: var(--muted); }
+.sg-text { flex: 1; min-width: 0; display: grid; }
+.sg-main { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sg-sub { font-family: var(--font-mono); font-size: 12px; color: var(--url); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sg-kind { flex: none; font-size: 11.5px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 6px; }
+.suggest mark { background: none; color: inherit; font-weight: 700; }
+.sg-del {
+  flex: none; width: 28px; height: 28px; border: 0; border-radius: 50%; background: none;
+  color: var(--muted); font-size: 18px; line-height: 1; cursor: pointer;
+}
+.sg-del:hover { background: var(--line); color: var(--ink); }
+.sg-chips { display: flex; flex-wrap: wrap; gap: 8px; padding: 6px 12px 10px; }
+.sg-chip {
+  border: 1px solid var(--line); background: var(--paper); border-radius: 999px; padding: 3px 12px; font-size: 13.5px; cursor: pointer;
+}
+.sg-chip:hover, .sg-chip[aria-selected="true"] { border-color: var(--ink); }
+
+.meta { margin: -8px 0 0; font-size: 13px; color: var(--muted); text-align: center; min-height: 1.6em; }
+.meta .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.dym { border: 0; background: none; padding: 0; color: var(--blue); font-weight: 700; cursor: pointer; text-decoration: underline; }
+
+/* ---------- results ---------- */
+.results { margin-top: 30px; display: grid; gap: 24px; }
+.hit { min-width: 0; }
+.hit-url {
+  font-family: var(--font-mono); font-size: 12.5px; color: var(--url);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.hit-title {
+  display: inline-block; font-size: 18px; font-weight: 700; line-height: 1.4; color: var(--blue);
+  text-decoration: none; overflow-wrap: anywhere;
+}
+.hit-title:hover { text-decoration: underline; }
+.hit-desc { margin: 3px 0 0; color: var(--ink); font-size: 14.5px; overflow-wrap: anywhere; }
+.hit-tags { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; }
+.tag {
+  font-size: 12px; padding: 0 8px; border-radius: 4px; background: var(--card); border: 1px solid var(--line); color: var(--muted);
+  cursor: pointer;
+}
+.tag:hover { border-color: var(--ink); color: var(--ink); }
+.results mark { background: none; color: inherit; font-weight: 700; }
+.empty { text-align: center; color: var(--muted); padding-block: 12px; }
+.more {
+  display: block; margin: 28px auto 0; border: 1.5px solid var(--line); background: var(--card); color: var(--ink);
+  border-radius: 999px; padding: 8px 20px; font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.more:hover { border-color: var(--ink); }
+
+/* ---------- school picker ---------- */
+.schools { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: -6px; }
+.school-chip {
+  border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 3px 12px;
+  font-size: 13.5px; cursor: pointer; color: var(--muted);
+}
+.school-chip:hover { border-color: var(--ink); color: var(--ink); }
+.school-chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+
+/* ---------- loading (Google 式) ---------- */
+.loadbar { width: 100%; height: 3px; margin: -12px 0 -7px; border-radius: 2px; overflow: hidden; position: relative; background: var(--chip); }
+.loadbar::after {
+  content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 35%;
+  background: var(--blue); border-radius: 2px; animation: loading .9s ease-in-out infinite;
+}
+@keyframes loading { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
+.skel { display: grid; gap: 8px; }
+.skel span { display: block; height: 12px; border-radius: 6px; background: var(--chip); animation: pulse 1.2s ease-in-out infinite; }
+.skel span:nth-child(1) { width: 40%; height: 10px; }
+.skel span:nth-child(2) { width: 65%; height: 16px; }
+.skel span:nth-child(3) { width: 90%; }
+@keyframes pulse { 50% { opacity: .5; } }
+@media (prefers-reduced-motion: reduce) { .loadbar::after { animation: none; width: 100%; } .skel span { animation: none; } }
+
+/* ---------- competition cards ---------- */
+.comps { margin-top: 30px; display: grid; gap: 12px; }
+.comps:empty { display: none; }
+.section-head { margin: 0; font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: .08em; }
+.results .section-head { margin-bottom: -10px; }
+.comp { border: 1px solid var(--line); border-radius: 14px; background: var(--card); transition: box-shadow .15s; }
+.comp:hover, .comp[open] { box-shadow: 0 1px 8px var(--shadow); }
+.comp summary { list-style: none; cursor: pointer; display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; }
+.comp summary::-webkit-details-marker { display: none; }
+.comp-main { flex: 1; min-width: 0; }
+.comp-name { margin: 0; font-size: 17px; line-height: 1.4; font-weight: 700; text-wrap: pretty; }
+.comp-org { font-size: 13.5px; color: var(--muted); }
+.comp-value { margin-top: 4px; font-size: 15px; font-weight: 700; }
+.comp-value.na { font-weight: 500; color: var(--muted); }
+.comp-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: none; }
+.comp-days { font-size: 12px; font-family: var(--font-mono); color: var(--muted); white-space: nowrap; }
+.comp-days.soon { color: var(--pink); font-weight: 600; }
+.chev { width: 18px; height: 18px; color: var(--muted); transition: transform .15s; }
+.comp[open] .chev { transform: rotate(180deg); }
+.comp-body { margin: 0 16px; padding: 12px 0 14px; border-top: 1px solid var(--line); }
+.prizes { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 14px; font-size: 14.5px; }
+.prizes dt { font-weight: 700; white-space: nowrap; display: flex; align-items: center; gap: 8px; }
+.rank {
+  width: 20px; height: 20px; border-radius: 50%; display: inline-grid; place-items: center;
+  font-size: 11px; font-family: var(--font-mono); border: 1.5px solid var(--ink);
+}
+.prizes dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.prizes dd.na { color: var(--muted); }
+.comp-note { margin: 12px 0 0; font-size: 13px; color: var(--muted); }
+.comp-foot { margin-top: 10px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 13.5px; }
+.comp-foot .date { font-family: var(--font-mono); font-size: 13px; color: var(--muted); }
+.comp-foot a { color: var(--blue); font-weight: 700; text-decoration: none; }
+.comp-foot a:hover { text-decoration: underline; }
+.comp-tags { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+.ctag { font-size: 12px; padding: 1px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.ctag.free { border-color: var(--url); color: var(--ink); }
+.ctag.who { border-color: transparent; background: var(--chip); color: var(--ink); }
+.ctag.target { border-color: var(--ink); background: var(--ink); color: var(--paper); font-weight: 700; }
+.apply {
+  display: block; margin-top: 14px; text-align: center; padding: 11px 16px; border-radius: 999px;
+  background: var(--ink); color: var(--paper); font-weight: 700; font-size: 15px; text-decoration: none;
+}
+.apply:hover { opacity: .85; }
+@media (prefers-reduced-motion: reduce) { .chev, .comp { transition: none; } }
+</style>
+</head>
+<body>
+
+<main class="wrap">
+  <header class="hero">
+    <div class="brand">
+      <h1><span class="en">Open Call</span><span class="zh">雷達</span><span class="hk">HK</span></h1>
+    </div>
+    <form class="search" id="searchForm" role="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="搜尋網站" autocomplete="off" spellcheck="false" aria-label="搜尋網站"
+        role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggest">
+      <div class="suggest" id="suggest" role="listbox" aria-label="搜尋建議" hidden></div>
+    </form>
+    <div class="loadbar" id="loadbar" hidden></div>
+    <p class="meta" id="meta">載入緊網站清單…</p>
+  </header>
+
+  <section class="comps" id="comps" aria-label="比賽"></section>
+  <section class="results" id="results" aria-live="polite"></section>
+  <button class="more" id="more" hidden>顯示更多</button>
+</main>
+
+<script>
+const PAGE = 30;
+let SITES = [];
+let fuse = null;
+let hits = [];
+let shown = PAGE;
+
+const $ = id => document.getElementById(id);
+const input = $("q");
+
+/* ---------- CSV (Excel 匯出都得) ---------- */
+function parseCSV(text) {
+  text = text.replace(/^﻿/, "");
+  const rows = [];
+  let row = [], cell = "", inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+      else if (c === '"') inQuotes = false;
+      else cell += c;
+    } else if (c === '"') inQuotes = true;
+    else if (c === ",") { row.push(cell); cell = ""; }
+    else if (c === "\n" || c === "\r") {
+      if (c === "\r" && text[i + 1] === "\n") i++;
+      row.push(cell); rows.push(row); row = []; cell = "";
+    } else cell += c;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows.filter(r => r.some(v => v.trim()));
+}
+
+const COLS = {
+  name: ["名稱", "名字", "name", "title"],
+  url: ["網址", "連結", "link", "url"],
+  desc: ["介紹", "簡介", "description", "desc"],
+  tags: ["標籤", "分類", "tags", "category"],
+  school: ["學校", "school"]
+};
+function toSites(rows) {
+  const head = rows[0].map(h => h.trim().toLowerCase());
+  const idx = {};
+  for (const k in COLS) idx[k] = head.findIndex(h => COLS[k].includes(h));
+  return rows.slice(1).map(r => {
+    const get = k => (idx[k] >= 0 ? (r[idx[k]] || "").trim() : "");
+    return {
+      name: get("name"),
+      url: get("url"),
+      desc: get("desc"),
+      tags: get("tags").split(/[;；、\/|]/).map(t => t.trim()).filter(Boolean),
+      school: get("school")
+    };
+  }).filter(s => s.name || s.url);
+}
+
+/* ---------- 比賽 ---------- */
+let COMPS = [];
+const COMP_COLS = {
+  name: ["比賽名稱", "名稱"], org: ["主辦", "公司"], deadline: ["截止日期"], time: ["截止時間"],
+  p1: ["冠軍", "第一名"], p2: ["亞軍", "第二名"], p3: ["季軍", "第三名"], merit: ["優異獎"],
+  total: ["獎品總值"], kind: ["價值類型"], type: ["獎品類別"], tags: ["標籤", "報名費"], who: ["適用對象", "其他條件"], target: ["對象"], apply: ["報名連結"],
+  url: ["網址", "連結"], note: ["備註"], school: ["學校"]
+};
+
+/* ---------- 學校：只限某間學校嘅比賽，揀咗其他學校就收埋 ---------- */
+const SCHOOLS = ["全部", "港大", "中大", "科大", "理大", "城大", "浸大", "嶺大", "教大", "都大", "HKDI"];
+let school = "全部";
+const okSchool = s => school === "全部" || !s || s === school;
+function renderSchools() {
+  $("schools").innerHTML = SCHOOLS.map(s =>
+    `<button type="button" class="school-chip" data-school="${s}" aria-pressed="${s === school}">${s}</button>`).join("");
+}
+function toComps(rows) {
+  const head = rows[0].map(h => h.trim());
+  const idx = {};
+  for (const k in COMP_COLS) idx[k] = head.findIndex(h => COMP_COLS[k].includes(h));
+  return rows.slice(1).map(r => {
+    const c = {};
+    for (const k in COMP_COLS) c[k] = idx[k] >= 0 ? (r[idx[k]] || "").trim() : "";
+    return c;
+  }).filter(c => c.name);
+}
+
+/* 截止日期一律當香港時間 */
+function deadlineMs(date, time) { return new Date(`${date}T${time || "23:59"}:00+08:00`).getTime(); }
+function hkDayStart(ms) {
+  const d = new Date(ms + 8 * 3600e3);
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
+function daysLeft(c) {
+  if (!c.deadline) return Infinity;
+  const end = deadlineMs(c.deadline, c.time);
+  if (isNaN(end)) return Infinity;
+  if (end < Date.now()) return -1;
+  return Math.round((hkDayStart(end) - hkDayStart(Date.now())) / 86400e3);
+}
+
+function valueLine(c) {
+  const n = Number(String(c.total).replace(/[^\d.]/g, ""));
+  const money = n ? "HK$" + n.toLocaleString("en-US") : "";
+  const extra = c.type ? ` + ${c.type}` : "";
+  if (money && c.kind === "現金") return [`獎金 ${money}${extra}`, ""];
+  if (money && c.kind === "估計") return [`獎金約 ${money}${extra}`, ""];
+  if (money && c.kind === "至少") return [`獎金 ${money} 起${extra}`, ""];
+  if (money && c.kind === "獎金池") return [`總獎金 ${money}（得獎者攤分）${extra}`, ""];
+  return [c.type, ""];
+}
+
+/* ---------- 同義詞：中英、簡繁互通 ---------- */
+const SYNONYMS = [
+  ["設計", "design", "设计"],
+  ["藝術", "art", "arts", "艺术"],
+  ["攝影", "photo", "photography", "摄影"],
+  ["數碼媒體", "數碼", "digital", "media", "數碼藝術", "数码", "数码媒体"],
+  ["駐留", "residency", "驻留"],
+  ["資助", "grant", "grants", "funding", "资助"],
+  ["比賽", "competition", "contest", "比赛"],
+  ["徵稿", "open call", "征稿", "徵集"],
+  ["插畫", "illustration", "插画"],
+  ["動畫", "animation", "动画"],
+  ["短片", "film", "video", "影像"],
+  ["學生", "student", "students", "学生"],
+  ["展覽", "exhibition", "展览"],
+  ["香港", "hong kong", "hk"],
+  // 大學簡稱
+  ["香港大學", "港大", "hku", "university of hong kong"],
+  ["香港中文大學", "中大", "cuhk", "chinese university of hong kong"],
+  ["香港科技大學", "科大", "hkust", "ust"],
+  ["香港理工大學", "理大", "polyu"],
+  ["香港城市大學", "城大", "cityu"],
+  ["香港浸會大學", "浸大", "hkbu"],
+  ["嶺南大學", "嶺大", "lingnan", "lu"],
+  ["香港教育大學", "教大", "eduhk"],
+  ["香港都會大學", "都大", "hkmu"],
+  ["香港知專設計學院", "知專", "hkdi"],
+  ["香港演藝學院", "演藝", "hkapa"]
+];
+function alts(term) {
+  const t = term.toLowerCase();
+  const group = SYNONYMS.find(g => g.some(w => w.toLowerCase() === t));
+  return group ? [...new Set([t, ...group.map(w => w.toLowerCase())])] : [t];
+}
+
+/* ---------- search ---------- */
+const FIELD_WEIGHT = { name: 3, tags: 2, desc: 1, url: 0.5 };
+function fieldText(site, key) { return key === "tags" ? site.tags.join(" ") : site[key]; }
+
+function exactRanges(text, q) {
+  const out = [], t = text.toLowerCase(), n = q.toLowerCase();
+  if (!n) return out;
+  for (let i = t.indexOf(n); i !== -1; i = t.indexOf(n, i + n.length)) out.push([i, i + n.length - 1]);
+  return out;
+}
+
+function search(q) {
+  const results = [];
+  const seen = new Set();
+  const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
+
+  // 1. 完全符合（每個字或者佢嘅同義詞都要搵到）排最前
+  SITES.forEach((site, i) => {
+    let score = 0;
+    const ranges = {};
+    const ok = terms.every(term => {
+      let found = false;
+      alts(term).forEach((alt, ai) => {
+        for (const key in FIELD_WEIGHT) {
+          const r = exactRanges(fieldText(site, key), alt);
+          if (r.length) {
+            found = true;
+            score += FIELD_WEIGHT[key] * (ai === 0 ? 1 : 0.8);
+            (ranges[key] = ranges[key] || []).push(...r);
+          }
+        }
+      });
+      return found;
+    });
+    if (ok) { results.push({ site, score, ranges, fuzzy: false }); seen.add(i); }
+  });
+  // 1b. 中文冇空格：拆開兩個字兩個字咁對，例如「攝影比賽」→「攝影」+「比賽」
+  const hasCJK = /[㐀-鿿]/.test(q);
+  const flat = q.replace(/\s/g, "");
+  if (!results.length && hasCJK && flat.length >= 3) {
+    const chunks = flat.match(/.{1,2}/g);
+    SITES.forEach((site, i) => {
+      let score = 0;
+      const ranges = {};
+      const ok = chunks.every(ch => alts(ch).some(alt => {
+        let found = false;
+        for (const key in FIELD_WEIGHT) {
+          const r = exactRanges(fieldText(site, key), alt);
+          if (r.length) { found = true; score += FIELD_WEIGHT[key]; (ranges[key] = ranges[key] || []).push(...r); }
+        }
+        return found;
+      }));
+      if (ok) { results.push({ site, score, ranges, fuzzy: false }); seen.add(i); }
+    });
+  }
+  results.sort((a, b) => b.score - a.score);
+
+  // 2. 打錯字都搵到：模糊搜尋補上（3 個字母或以下太短，唔估，免得出唔相關嘅嘢）
+  const compact = q.replace(/\s/g, "");
+  const tooShort = /^[a-z0-9]+$/i.test(compact) ? compact.length <= 3 : compact.length <= 2;
+  if (fuse && !tooShort && !hasCJK) {
+    fuse.search(q).forEach(({ item, refIndex, matches }) => {
+      if (seen.has(refIndex)) return;
+      const ranges = {};
+      const minLen = Math.min(2, q.length);
+      (matches || []).forEach(m => {
+        if (m.key === "tags") return;
+        const r = m.indices.filter(([s, e]) => e - s + 1 >= minLen);
+        if (r.length) (ranges[m.key] = ranges[m.key] || []).push(...r);
+      });
+      results.push({ site: item, ranges, fuzzy: true });
+      seen.add(refIndex);
+    });
+  }
+
+  // 3. 中文打錯字：完全搵唔到先逐個字對，有一半或以上嘅字啱就當相近
+  const chars = [...new Set(q.replace(/\s+/g, "").match(/[㐀-鿿]/g) || [])];
+  if (chars.length >= 3 && !results.some(r => !r.fuzzy)) {
+    const need = Math.max(2, Math.ceil(chars.length / 2));
+    const extra = [];
+    SITES.forEach((site, i) => {
+      if (seen.has(i)) return;
+      const ranges = {};
+      let count = 0;
+      chars.forEach(ch => {
+        let hit = false;
+        for (const key of ["name", "desc", "tags"]) {
+          const r = exactRanges(fieldText(site, key), ch);
+          if (r.length) { hit = true; if (key !== "tags") (ranges[key] = ranges[key] || []).push(...r); }
+        }
+        if (hit) count++;
+      });
+      if (count >= need) extra.push({ site, ranges, fuzzy: true, count });
+    });
+    extra.sort((a, b) => b.count - a.count);
+    results.push(...extra);
+  }
+  return results;
+}
+
+/* ---------- 最近搜尋（只存喺你部機） ---------- */
+const RECENT_KEY = "ocr-recent";
+let recent = [];
+try { recent = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]"); } catch (e) {}
+function saveRecent(q) {
+  q = q.trim();
+  if (!q) return;
+  recent = [q, ...recent.filter(r => r !== q)].slice(0, 6);
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(recent)); } catch (e) {}
+}
+function clearRecent() {
+  recent = [];
+  try { localStorage.removeItem(RECENT_KEY); } catch (e) {}
+}
+function removeRecent(q) {
+  recent = recent.filter(r => r !== q);
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(recent)); } catch (e) {}
+}
+
+let tagCounts = [];
+function buildTags() {
+  const m = new Map();
+  SITES.forEach(s => s.tags.forEach(t => m.set(t, (m.get(t) || 0) + 1)));
+  tagCounts = [...m.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t);
+}
+
+/* ---------- 建議 ---------- */
+function suggestions(q) {
+  const n = q.trim().toLowerCase();
+  if (!n) return { recent: recent.slice(), tags: tagCounts.slice(0, 8), items: [] };
+
+  const items = [];
+  recent.filter(r => r.toLowerCase().includes(n) && r.toLowerCase() !== n).slice(0, 2)
+    .forEach(text => items.push({ kind: "recent", text }));
+
+  const keys = alts(n);
+  tagCounts.filter(t => keys.some(k => t.toLowerCase().includes(k))).slice(0, 3)
+    .forEach(text => items.push({ kind: "tag", text }));
+
+  // 網站名開頭啱嘅排先，跟住係中間啱，唔夠就用模糊結果補
+  const scored = [];
+  SITES.forEach(site => {
+    const name = site.name.toLowerCase();
+    let sc = -1;
+    if (name.startsWith(n)) sc = 3;
+    else if (name.split(/[\s｜|·]+/).some(w => w.startsWith(n))) sc = 2;
+    else if (name.includes(n)) sc = 1;
+    if (sc >= 0) scored.push({ site, sc });
+  });
+  scored.sort((a, b) => b.sc - a.sc || a.site.name.length - b.site.name.length);
+  const sites = scored.map(x => x.site);
+  if (sites.length < 5) search(q).forEach(h => { if (!sites.includes(h.site)) sites.push(h.site); });
+  sites.slice(0, 5).forEach(site => items.push({ kind: "site", site }));
+
+  return { items: items.slice(0, 8) };
+}
+
+const ICON = {
+  recent: '<svg class="sg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  tag: '<svg class="sg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 9h14M5 15h14M10 4 8 20M16 4l-2 16"/></svg>',
+  site: '<svg class="sg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>'
+};
+
+let active = -1;
+function options() { return [...$("suggest").querySelectorAll("[role=option]")]; }
+
+function openSuggest() {
+  const q = input.value;
+  const box = $("suggest");
+  const s = suggestions(q);
+  let html = "";
+  if (!q.trim()) {
+    if (s.recent.length) {
+      html += `<div class="sg-head"><span>最近搜尋</span><button type="button" data-act="clear">清除</button></div>`;
+      html += s.recent.map((text, i) =>
+        `<div class="sg-item" role="option" id="sg-r${i}" data-fill="${esc(text)}" aria-selected="false">${ICON.recent}<span class="sg-text"><span class="sg-main">${esc(text)}</span></span><button type="button" class="sg-del" data-del="${esc(text)}" aria-label="刪除「${esc(text)}」" title="刪除">×</button></div>`).join("");
+    }
+    if (s.tags.length) {
+      html += `<div class="sg-head"><span>熱門標籤</span></div><div class="sg-chips">` +
+        s.tags.map((text, i) => `<span class="sg-chip" role="option" id="sg-t${i}" data-fill="${esc(text)}" aria-selected="false">${esc(text)}</span>`).join("") +
+        `</div>`;
+    }
+  } else {
+    html = s.items.map((it, i) => {
+      if (it.kind === "site") {
+        const name = it.site.name || prettyUrl(it.site.url);
+        return `<a class="sg-item" role="option" id="sg-${i}" href="${esc(safeHref(it.site.url))}" target="_blank" rel="noopener" aria-selected="false">${ICON.site}<span class="sg-text"><span class="sg-main">${highlight(name, exactRanges(name, q.trim()))}</span><span class="sg-sub">${esc(prettyUrl(it.site.url))}</span></span><span class="sg-kind">網站</span></a>`;
+      }
+      return `<div class="sg-item" role="option" id="sg-${i}" data-fill="${esc(it.text)}" aria-selected="false">${ICON[it.kind]}<span class="sg-text"><span class="sg-main">${highlight(it.text, exactRanges(it.text, q.trim()))}</span></span>${it.kind === "tag" ? '<span class="sg-kind">標籤</span>' : ""}</div>`;
+    }).join("");
+  }
+  box.innerHTML = html;
+  box.hidden = !html;
+  input.setAttribute("aria-expanded", String(!!html));
+  active = -1;
+  input.removeAttribute("aria-activedescendant");
+}
+function closeSuggest() {
+  $("suggest").hidden = true;
+  input.setAttribute("aria-expanded", "false");
+  input.removeAttribute("aria-activedescendant");
+  active = -1;
+}
+function moveActive(step) {
+  const opts = options();
+  if (!opts.length) return;
+  // -1 代表返去搜尋框，所以有 opts.length + 1 個位置輪住行
+  active = (active + 1 + step + opts.length + 1) % (opts.length + 1) - 1;
+  opts.forEach((o, i) => o.setAttribute("aria-selected", String(i === active)));
+  if (active >= 0) {
+    input.setAttribute("aria-activedescendant", opts[active].id);
+    opts[active].scrollIntoView({ block: "nearest" });
+  } else input.removeAttribute("aria-activedescendant");
+}
+function fill(text) {
+  input.value = text;
+  saveRecent(text);
+  scheduleSearch(300);
+  closeSuggest();
+}
+
+/* ---------- render ---------- */
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+function highlight(text, ranges) {
+  if (!ranges || !ranges.length) return esc(text);
+  const sorted = ranges.slice().sort((a, b) => a[0] - b[0]);
+  const merged = [];
+  for (const [s, e] of sorted) {
+    const last = merged[merged.length - 1];
+    if (last && s <= last[1] + 1) last[1] = Math.max(last[1], e); else merged.push([s, e]);
+  }
+  let out = "", pos = 0;
+  for (const [s, e] of merged) {
+    out += esc(text.slice(pos, s)) + "<mark>" + esc(text.slice(s, e + 1)) + "</mark>";
+    pos = e + 1;
+  }
+  return out + esc(text.slice(pos));
+}
+function safeHref(url) {
+  if (!url) return "";
+  return /^https?:\/\//i.test(url) ? url : "https://" + url;
+}
+function prettyUrl(url) {
+  try { const u = new URL(safeHref(url)); return (u.host + u.pathname).replace(/\/$/, ""); }
+  catch (e) { return url; }
+}
+
+function hitHTML({ site, ranges }) {
+  const href = safeHref(site.url);
+  const title = highlight(site.name || prettyUrl(site.url), site.name ? ranges.name : null);
+  return `
+  <article class="hit">
+    <div class="hit-url">${esc(prettyUrl(site.url))}</div>
+    ${href ? `<a class="hit-title" href="${esc(href)}" target="_blank" rel="noopener">${title}</a>` : `<span class="hit-title">${title}</span>`}
+    ${site.desc ? `<p class="hit-desc">${highlight(site.desc, ranges.desc)}</p>` : ""}
+    ${site.tags.length ? `<div class="hit-tags">${site.tags.map(t => `<span class="tag" data-fill="${esc(t)}">${esc(t)}</span>`).join("")}</div>` : ""}
+  </article>`;
+}
+
+const CHEV = '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+const RANKS = [["p1", "冠軍", "1"], ["p2", "亞軍", "2"], ["p3", "季軍", "3"], ["merit", "優異獎", ""]];
+
+function compHTML(c) {
+  const n = daysLeft(c);
+  const days = n === Infinity ? "" : n === 0 ? "今日截止" : `仲有 ${n} 日`;
+  const [value] = valueLine(c);
+  const applyHref = safeHref(c.apply || c.url);
+  const tags = c.tags.split(/[;；]/).map(t => t.trim()).filter(Boolean);
+  // 次序：對象（學校／大學、大專生／公開）→ 報名費 → 其他條件
+  const targets = c.target.split(/[;；、]/).map(t => t.trim()).filter(Boolean);
+  const targetList = c.target.includes("大學、大專生") ? [c.target] : targets;
+  const tagsHTML = targetList.length || tags.length || c.who
+    ? `<div class="comp-tags">` +
+      targetList.map(t => `<span class="ctag target">${esc(t)}</span>`).join("") +
+      tags.map(t => `<span class="ctag${t.includes("免費") ? " free" : ""}">${esc(t)}</span>`).join("") +
+      `${c.who ? `<span class="ctag who">${esc(c.who)}</span>` : ""}</div>`
+    : "";
+  const prizes = RANKS.filter(([k]) => c[k]).map(([k, label, num]) =>
+    `<dt>${num ? `<span class="rank">${num}</span>` : ""}${label}</dt><dd${c[k] === "未公布" ? ' class="na"' : ""}>${esc(c[k])}</dd>`).join("");
+  return `
+  <details class="comp">
+    <summary>
+      <div class="comp-main">
+        <h3 class="comp-name">${esc(c.name)}</h3>
+        <div class="comp-org">${esc(c.org)}</div>
+        ${value ? `<div class="comp-value">${esc(value)}</div>` : ""}
+        ${tagsHTML}
+      </div>
+      <div class="comp-side">${days ? `<span class="comp-days${n <= 14 ? " soon" : ""}">${days}</span>` : ""}${CHEV}</div>
+    </summary>
+    <div class="comp-body">
+      ${prizes ? `<dl class="prizes">${prizes}</dl>` : ""}
+      ${c.note ? `<p class="comp-note">${esc(c.note)}</p>` : ""}
+      <div class="comp-foot">
+        <span class="date">${c.deadline ? `截止 ${esc(c.deadline)}${c.time ? " " + esc(c.time) : ""}` : ""}</span>
+        ${c.url && c.apply && c.url !== c.apply ? `<a href="${esc(safeHref(c.url))}" target="_blank" rel="noopener">比賽詳情</a>` : ""}
+      </div>
+      ${applyHref ? `<a class="apply" href="${esc(applyHref)}" target="_blank" rel="noopener">報名 ↗</a>` : ""}
+    </div>
+  </details>`;
+}
+
+function renderComps(q) {
+  const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const list = COMPS
+    .filter(c => daysLeft(c) >= 0 && okSchool(c.school))
+    .filter(c => {
+      if (!terms.length) return true;
+      const hay = [c.name, c.org, c.target, c.who, c.tags, c.type, c.p1, c.p2, c.p3, c.merit, c.note].join(" ").toLowerCase();
+      return terms.every(t => alts(t).some(a => hay.includes(a)));
+    })
+    .sort((a, b) => daysLeft(a) - daysLeft(b));
+  $("comps").innerHTML = list.length
+    ? `<h2 class="section-head">比賽 · ${list.length}</h2>` + list.map(compHTML).join("")
+    : "";
+}
+
+function render() {
+  const q = input.value.trim();
+  const box = $("results");
+  const meta = $("meta");
+  const more = $("more");
+  document.body.classList.toggle("searching", !!q);
+  renderComps(q);
+
+  if (!q) {
+    hits = []; box.innerHTML = ""; more.hidden = true;
+    meta.innerHTML = "";
+    return;
+  }
+  if (!hits.length) {
+    meta.textContent = "";
+    box.innerHTML = `<p class="empty">搵唔到「${esc(q)}」，試吓用其他字</p>`;
+    more.hidden = true;
+    return;
+  }
+  const exactCount = hits.filter(h => !h.fuzzy).length;
+  if (!exactCount) {
+    const best = hits[0].site.name || prettyUrl(hits[0].site.url);
+    meta.innerHTML = `你係咪想搵 <button type="button" class="dym" data-fill="${esc(best)}">${esc(best)}</button>？` +
+      `（<span class="num">${hits.length}</span> 個相近結果）`;
+  } else {
+    meta.innerHTML = `搵到 <span class="num">${hits.length}</span> 個網站` +
+      (exactCount < hits.length ? `（其中 ${hits.length - exactCount} 個係相近結果）` : "");
+  }
+  box.innerHTML = `<h2 class="section-head">網站</h2>` + hits.slice(0, shown).map(hitHTML).join("");
+  more.hidden = hits.length <= shown;
+}
+
+function runSearch() {
+  clearTimeout(loadTimer);
+  $("loadbar").hidden = true;
+  const q = input.value.trim();
+  hits = q ? search(q).filter(h => okSchool(h.site.school)) : [];
+  shown = PAGE;
+  render();
+}
+
+// 好似 Google 咁：停手一陣先出結果，期間顯示載入條同預留位
+let loadTimer = null;
+const SKELETON = '<div class="skel"><span></span><span></span><span></span></div>'.repeat(3);
+function scheduleSearch(delay = 450) {
+  clearTimeout(loadTimer);
+  if (!input.value.trim()) { runSearch(); return; }
+  document.body.classList.add("searching");
+  $("loadbar").hidden = false;
+  $("meta").textContent = "";
+  $("comps").innerHTML = "";
+  $("results").innerHTML = SKELETON;
+  $("more").hidden = true;
+  loadTimer = setTimeout(runSearch, delay);
+}
+
+/* ---------- events ---------- */
+input.addEventListener("input", () => { scheduleSearch(); openSuggest(); });
+input.addEventListener("focus", openSuggest);
+input.addEventListener("blur", closeSuggest);
+input.addEventListener("keydown", e => {
+  const isOpen = !$("suggest").hidden;
+  if (e.key === "ArrowDown") { e.preventDefault(); isOpen ? moveActive(1) : openSuggest(); }
+  else if (e.key === "ArrowUp") { if (isOpen) { e.preventDefault(); moveActive(-1); } }
+  else if (e.key === "Escape") { closeSuggest(); }
+  else if (e.key === "Enter") {
+    e.preventDefault();
+    const opt = isOpen && active >= 0 ? options()[active] : null;
+    if (opt && opt.dataset.fill !== undefined) fill(opt.dataset.fill);
+    else if (opt) { saveRecent(input.value); opt.click(); closeSuggest(); }
+    else { saveRecent(input.value); closeSuggest(); scheduleSearch(300); }
+  }
+});
+$("searchForm").addEventListener("submit", e => e.preventDefault());
+
+const sg = $("suggest");
+sg.addEventListener("mousedown", e => e.preventDefault()); // 揀建議嗰陣唔好令搜尋框失焦
+sg.addEventListener("click", e => {
+  if (e.target.closest("[data-act=clear]")) { clearRecent(); openSuggest(); return; }
+  const del = e.target.closest("[data-del]");
+  if (del) { removeRecent(del.dataset.del); openSuggest(); return; }
+  const opt = e.target.closest("[role=option]");
+  if (!opt) return;
+  if (opt.dataset.fill !== undefined) { e.preventDefault(); fill(opt.dataset.fill); }
+  else { saveRecent(input.value); closeSuggest(); }
+});
+
+document.addEventListener("click", e => {
+  const f = e.target.closest(".tag[data-fill], .dym[data-fill]");
+  if (f) { fill(f.dataset.fill); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
+  if (e.target.closest(".hit-title")) saveRecent(input.value);
+});
+$("more").addEventListener("click", () => { shown += PAGE; render(); });
+
+async function load() {
+  // 比賽清單載入失敗唔影響網站搜尋
+  fetch("competitions.csv", { cache: "no-cache" })
+    .then(r => (r.ok ? r.text() : Promise.reject(r.status)))
+    .then(t => { COMPS = toComps(parseCSV(t)); renderComps(input.value.trim()); })
+    .catch(() => {});
+  try {
+    const res = await fetch("sites.csv", { cache: "no-cache" });
+    if (!res.ok) throw new Error(res.status);
+    SITES = toSites(parseCSV(await res.text()));
+  } catch (e) {
+    $("meta").textContent = "載入唔到網站清單，請重新整理頁面";
+    return;
+  }
+  buildTags();
+  if (window.Fuse) {
+    fuse = new Fuse(SITES, {
+      keys: [{ name: "name", weight: 3 }, { name: "tags", weight: 2 }, { name: "desc", weight: 1 }, { name: "url", weight: 0.5 }],
+      includeMatches: true,
+      ignoreLocation: true,
+      threshold: 0.4,
+      minMatchCharLength: 1
+    });
+  }
+  runSearch();
+  if (document.activeElement === input) openSuggest();
+}
+load();
+</script>
+</body>
+</html>
