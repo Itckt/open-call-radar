@@ -328,7 +328,7 @@ const COMP_COLS = {
   name: ["比賽名稱", "名稱"], org: ["主辦", "公司"], deadline: ["截止日期"], time: ["截止時間"],
   p1: ["冠軍", "第一名"], p2: ["亞軍", "第二名"], p3: ["季軍", "第三名"], merit: ["優異獎"],
   total: ["獎品總值"], kind: ["價值類型"], type: ["獎品類別"], tags: ["標籤", "報名費"], who: ["適用對象", "其他條件"], target: ["對象"], apply: ["報名連結"],
-  url: ["網址", "連結"], note: ["備註"], school: ["學校"]
+  url: ["網址", "連結"], note: ["備註"], school: ["學校"], region: ["地區"]
 };
 
 /* ---------- 學校：只限某間學校嘅比賽，揀咗其他學校就收埋 ---------- */
@@ -691,14 +691,15 @@ function compHTML(c) {
   const [value] = valueLine(c);
   const applyHref = safeHref(c.apply || c.url);
   const tags = c.tags.split(/[;；]/).map(t => t.trim()).filter(Boolean);
-  // 次序：對象（學校／大學、大專生／公開）→ 報名費 → 其他條件
+  // 次序：對象 → 參賽地區 → 報名費 → 其他條件
   const targets = c.target.split(/[;；、]/).map(t => t.trim()).filter(Boolean);
   const targetList = c.target.includes("大學、大專生") ? [c.target] : targets;
-  const tagsHTML = targetList.length || tags.length || c.who
+  const tagsHTML = targetList.length || c.region || tags.length || c.who
     ? `<div class="comp-tags">` +
       targetList.map(t => `<span class="ctag target">${esc(t)}</span>`).join("") +
+      `${c.region ? `<span class="ctag region" aria-label="參賽地區：${esc(c.region)}">${esc(c.region)}</span>` : ""}` +
       tags.map(t => `<span class="ctag${t.includes("免費") ? " free" : ""}">${esc(t)}</span>`).join("") +
-      `${c.who ? `<span class="ctag who">${esc(c.who)}</span>` : ""}</div>`
+      `${c.who ?`<span class="ctag who">${esc(c.who)}</span>` : ""}</div>`
     : "";
   const prizes = RANKS.filter(([k]) => c[k]).map(([k, label, num]) =>
     `<dt>${num ? `<span class="rank">${num}</span>` : ""}${label}</dt><dd${c[k] === "未公布" ? ' class="na"' : ""}>${esc(toHKD(c[k]))}</dd>`).join("");
@@ -731,7 +732,7 @@ function renderComps(q) {
     .filter(c => daysLeft(c) >= 0 && okSchool(c.school))
     .filter(c => {
       if (!terms.length) return true;
-      const hay = [c.name, c.org, c.target, c.who, c.tags, c.type, c.p1, c.p2, c.p3, c.merit, c.note].join(" ").toLowerCase();
+      const hay = [c.name, c.org, c.target, c.region, c.who, c.tags, c.type, c.p1, c.p2, c.p3, c.merit, c.note].join(" ").toLowerCase();
       return terms.every(t => alts(t).some(a => hay.includes(a)));
     })
     .sort((a, b) => daysLeft(a) - daysLeft(b));
