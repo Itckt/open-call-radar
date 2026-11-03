@@ -364,6 +364,19 @@ function daysLeft(c) {
   return Math.round((hkDayStart(end) - hkDayStart(Date.now())) / 86400e3);
 }
 
+/* 外幣獎金換算港幣（匯率約數，2026-10-30） */
+const HKD_RATE = { USD: 7.78, EUR: 8.77, GBP: 10.51, JPY: 0.0499, KRW: 0.00588, SGD: 6.14 };
+const CURRENCY = /(?:約\s?)?(US\$|USD\s?|€|EUR\s?|£|GBP\s?|JPY\s?|¥|KRW\s?|₩|S\$|SGD\s?)\s?(\d[\d,]*(?:\.\d+)?)/g;
+const CODE = { "US$": "USD", "€": "EUR", "£": "GBP", "¥": "JPY", "₩": "KRW", "S$": "SGD" };
+function toHKD(text) {
+  return text.replace(CURRENCY, (m, sym, num) => {
+    const rate = HKD_RATE[CODE[sym] || sym.trim()];
+    if (!rate) return m;
+    const hkd = Math.round(Number(num.replace(/,/g, "")) * rate / 10) * 10;
+    return `約 HK$${hkd.toLocaleString("en-US")}`;
+  });
+}
+
 function valueLine(c) {
   const n = Number(String(c.total).replace(/[^\d.]/g, ""));
   const money = n ? "HK$" + n.toLocaleString("en-US") : "";
@@ -688,7 +701,7 @@ function compHTML(c) {
       `${c.who ? `<span class="ctag who">${esc(c.who)}</span>` : ""}</div>`
     : "";
   const prizes = RANKS.filter(([k]) => c[k]).map(([k, label, num]) =>
-    `<dt>${num ? `<span class="rank">${num}</span>` : ""}${label}</dt><dd${c[k] === "未公布" ? ' class="na"' : ""}>${esc(c[k])}</dd>`).join("");
+    `<dt>${num ? `<span class="rank">${num}</span>` : ""}${label}</dt><dd${c[k] === "未公布" ? ' class="na"' : ""}>${esc(toHKD(c[k]))}</dd>`).join("");
   return `
   <details class="comp">
     <summary>
