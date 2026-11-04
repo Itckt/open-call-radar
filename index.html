@@ -729,6 +729,7 @@ function compHTML(c) {
 /* 搜尋對象：打「university」「中學」或者學校簡稱，就按報名資格排，專屬嘅先，公開嘅後 */
 const UNI_WORDS = ["university", "uni", "universities", "大學", "大學生", "大專", "大專生", "tertiary", "college", "大學、大專生"];
 const SEC_WORDS = ["secondary", "secondary school", "high school", "中學", "中學生", "中學組"];
+const PRI_WORDS = ["primary", "primary school", "elementary school", "小學", "小學生", "小學組"];
 const SCHOOL_CODES = {
   HKU: ["hku", "港大", "香港大學", "university of hong kong"],
   CUHK: ["cuhk", "中大", "香港中文大學"],
@@ -748,12 +749,14 @@ function audienceOf(q) {
   for (const [code, words] of Object.entries(SCHOOL_CODES)) if (words.includes(t)) return { level: "uni", school: code };
   if (UNI_WORDS.includes(t)) return { level: "uni" };
   if (SEC_WORDS.includes(t)) return { level: "sec" };
+  if (PRI_WORDS.includes(t)) return { level: "pri" };
   return null;
 }
 // 0 = 只限你間學校，1 = 你呢個程度，2 = 學生，3 = 公開；-1 = 報唔到
 function audienceRank(c, aud) {
   const tg = c.target.trim();
   if (aud.level === "sec") return tg === "中學生" ? 1 : tg === "學生" ? 2 : tg === "公開" ? 3 : -1;
+  if (aud.level === "pri") return tg === "小學生" ? 1 : tg === "學生" ? 2 : tg === "公開" ? 3 : -1;
   if (aud.school && tg.split(/[;；]/).map(s => s.trim()).includes(aud.school)) return 0;
   return tg === "大學、大專生" ? 1 : tg === "學生" ? 2 : tg === "公開" ? 3 : -1;
 }
@@ -766,7 +769,7 @@ function renderComps(q) {
       .sort((a, b) => a[0] - b[0] || daysLeft(a[1]) - daysLeft(b[1]));
     const mine = ranked.filter(([r]) => r < 3).map(([, c]) => c);
     const pub = ranked.filter(([r]) => r === 3).map(([, c]) => c);
-    const who = aud.level === "sec" ? "中學生" : aud.school ? `${aud.school}、大學、大專生` : "大學、大專生";
+    const who = aud.level === "pri" ? "小學生" : aud.level === "sec" ? "中學生" : aud.school ? `${aud.school}、大學、大專生` : "大學、大專生";
     $("comps").innerHTML =
       (mine.length ? `<h2 class="section-head">${esc(who)}報得 · ${mine.length}</h2>` + mine.map(compHTML).join("") : "") +
       (pub.length ? `<h2 class="section-head">公開比賽，任何人都報得 · ${pub.length}</h2>` + pub.map(compHTML).join("") : "");
