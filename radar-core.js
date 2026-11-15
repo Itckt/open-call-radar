@@ -9,9 +9,9 @@ export const SCHOOLS = {
 export const CATEGORIES = [
   { id: "all", label: "全部", words: [] },
   { id: "design", label: "設計", words: ["設計", "design", "資訊圖表", "信息圖", "廣告"] },
-  { id: "art", label: "藝術", words: ["藝術", "繪畫", "填色", "插畫", "手工", "手作", "art", "drawing"] },
-  { id: "photo", label: "攝影", words: ["攝影", "photography", "photo", "小誌"] },
-  { id: "film", label: "影像", words: ["短片", "影片", "電影", "影像", "動畫", "film", "video", "reels"] },
+  { id: "art", label: "藝術", words: ["藝術", "繪畫", "填色", "插畫", "手工", "手作", "art", "arts", "artwork", "artworks", "drawing", "drawings", "painting", "illustration", "watercolour", "watercolor"] },
+  { id: "photo", label: "攝影", words: ["攝影", "photography", "photo", "photos", "photograph", "photographs", "photographer", "photographers", "photographic", "小誌"] },
+  { id: "film", label: "影像", words: ["短片", "影片", "電影", "影像", "動畫", "film", "films", "filmmaking", "video", "videos", "animation", "reels"] },
   { id: "digital", label: "數碼 / AI", words: ["數碼", "電繪", "人工智能", "生成式", "ai", "digital", "應用程式"] }
 ];
 export const STATUSES = {
@@ -122,7 +122,7 @@ export function inCategory(record, category) {
   const entry = CATEGORIES.find(item => item.id === category);
   if (!entry || entry.id === "all") return true;
   const text = [record.name, record.org, record.eligibility, record.prizeType].join(" ").toLowerCase();
-  return entry.words.some(word => word === "ai" ? /\bai\b/i.test(text) : text.includes(word));
+  return entry.words.some(word => containsTerm(text, word));
 }
 function schoolCodes(text) {
   const tokens = String(text || "").split(/[;；、,\s]+/);
@@ -185,7 +185,8 @@ const SCHOOL_ALIASES = {
 export function analyseQuery(query = "") {
   let text = String(query).normalize("NFKC").toLowerCase().trim();
   let profile = "";
-  const aliases = Object.entries(SCHOOL_ALIASES).flatMap(([code, list]) => list.map(word => [code, word]));
+  const aliases = Object.entries(SCHOOL_ALIASES).flatMap(([code, list]) =>
+    [...new Set([...list, SCHOOLS[code]])].map(word => [code, word]));
   aliases.push(["tertiary", "大專生"], ["tertiary", "大學生"], ["tertiary", "tertiary"],
     ["tertiary", "university"], ["secondary", "中學生"], ["primary", "小學生"]);
   for (const [code, word] of aliases.sort((a, b) => b[1].length - a[1].length)) {
@@ -194,8 +195,10 @@ export function analyseQuery(query = "") {
   }
   const free = /免費|免费|\bfree\b/.test(text);
   text = text.replace(/免費|免费|\bfree\b/g, " ");
-  const days = /本週|本周|7日內|7日内|\bthis week\b/.test(text) ? 7 : 0;
-  text = text.replace(/本週|本周|7日內|7日内|\bthis week\b/g, " ");
+  const dayPattern = /(?:\b(7|30|90)\s*(?:日|天)\s*[內内])|本週|本周|\bthis week\b/gi;
+  const ranges = [...text.matchAll(dayPattern)].map(match => Number(match[1]) || 7);
+  const days = ranges.length ? Math.min(...ranges) : 0;
+  text = text.replace(dayPattern, " ");
   text = text.replace(/比賽|比赛|\bcompetitions?\b|\bcontests?\b/g, " ");
   // Split known Chinese compounds without breaking English phrases.
   const words = GROUPS.flat().filter(word => /[\u3400-\u9fff]/.test(word)).sort((a, b) => b.length - a.length);

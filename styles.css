@@ -90,6 +90,8 @@ h2 { font-size: 16px; margin: 0; font-weight: 700; }
 .deadline-label::before { content: ""; width: 5px; height: 5px; background: currentColor; border-radius: 50%; }
 .deadline-label.soon { color: var(--pink); }
 .deadline-label.closed { color: var(--muted); }
+.deadline-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.deadline-date { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .save-button { width: 32px; height: 32px; margin: -5px -6px -5px 0; }
 .save-button[aria-pressed="true"] { color: var(--pink); }
 .save-button[aria-pressed="true"] svg { fill: var(--pink-soft); }
@@ -189,6 +191,10 @@ dialog form { text-align: right; margin-top: 18px; }
   .toggle-button { padding: 9px 10px; font-size: 11px; }
   .category-row { margin-right: -18px; padding-right: 18px; }
   .category-row button { padding-inline: 14px; }
+  .view-tabs button, .category-row button, .toggle-button, .text-button, .calendar-button, .card-details summary { min-height: 44px; }
+  .icon-button, .theme-toggle, .save-button, .result-actions .icon-button, #clear-search { width: 44px; height: 44px; }
+  .select-control select, .sort-control select { min-height: 32px; font-size: 14px; }
+  .saved-editor select, .saved-editor textarea { font-size: 16px; }
 }
 @media (max-width: 420px) {
   .topbar { flex-wrap: wrap; justify-content: center; padding: 18px 0 14px; gap: 14px; }
@@ -197,6 +203,7 @@ dialog form { text-align: right; margin-top: 18px; }
   .view-tabs { flex: 1; }
   .view-tabs button { flex: 1; }
   .search-space { padding-top: 25px; }
+  .category-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); overflow: visible; margin-right: 0; padding-right: 0; gap: 6px; }
   h1 { font-size: 25px; }
   .results-toolbar { gap: 5px; }
   .sort-control select { max-width: 115px; font-size: 11px; }

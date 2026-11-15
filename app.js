@@ -50,6 +50,7 @@ if (!Array.isArray(recent)) recent = [];
 recent = recent.filter(value => typeof value === "string").slice(0, 6);
 let competitions = [], sites = [], loading = true, loadingPromise = null;
 let competitionsFailed = false, siteFailed = false, notices = [], activeSuggestion = -1, searchTimer, toastTimer, undoAction;
+let composing = false;
 const openCards = new Set();
 $("q").value = state.q;
 
@@ -119,7 +120,7 @@ function renderControls() {
     '<button type="button" id="category-' + category.id + '" data-category="' + category.id + '" aria-pressed="' + (state.category === category.id) + '">' + category.label + "</button>").join("");
   const analysis = analyseQuery(state.q);
   const scope = analysis.profile || state.profile;
-  const inferred = [analysis.profile ? PROFILE_LABELS[analysis.profile] : "", analysis.free ? "免費" : "", analysis.days ? "7 日內截止" : ""].filter(Boolean);
+  const inferred = [analysis.profile ? PROFILE_LABELS[analysis.profile] : "", analysis.free ? "免費" : "", analysis.days ? analysis.days + " 日內截止" : ""].filter(Boolean);
   $("scope-note").textContent = (inferred.length ? "搜尋已套用：" + inferred.join(" · ") + "。 " : "")
     + (scope !== "all" ? "按學校／學段初篩；年齡、地區等附加限制請睇參賽詳情。" : "");
   $("scope-note").hidden = isSaved || (!inferred.length && scope === "all");
@@ -143,8 +144,9 @@ function cardHTML(record, isSavedView = false) {
   ].filter(([, value]) => value);
   const source = safeUrl(record.url);
   const label = entry ? "取消收藏 " : "收藏 ";
-  return '<article class="comp-card" id="' + record.id + '">' +
-    '<div class="card-top"><span class="deadline-label ' + deadline.state + '" title="' + esc(fullDate) + '">' + esc(deadline.label) + '</span>' +
+  return '<article class="comp-card" id="' + record.id + '" tabindex="-1">' +
+    '<div class="card-top"><div class="deadline-summary"><span class="deadline-label ' + deadline.state + '">' + esc(deadline.label) + '</span>' +
+    '<time class="deadline-date" datetime="' + esc(record.deadline + (record.time ? 'T' + record.time + ':00+08:00' : '')) + '" title="' + esc(fullDate) + '">' + esc(record.deadline.replaceAll('-', '/') + (record.time ? ' · ' + record.time : '')) + '</time></div>' +
     '<button type="button" class="icon-button save-button" id="save-' + record.id + '" data-save="' + record.id + '" aria-pressed="' + !!entry + '" aria-label="' + esc(label + record.name) + '" title="' + label.trim() + '">' + icon("bookmark") + "</button></div>" +
     "<h3>" + esc(record.name) + '</h3><p class="organiser">' + esc(record.org) + '</p><p class="prize-summary">' + esc(prizeSummary(record)) + "</p>" +
     '<div class="badges">' + (record.fee ? '<span class="badge ' + (record.fee === "免費" ? "free" : "") + '">' + esc(record.fee) + "</span>" : '<span class="badge">費用未列明</span>') +
@@ -294,6 +296,7 @@ function showSuggestions() {
 }
 function commitSearch(remember = false) {
   clearTimeout(searchTimer);
+  if (composing) return;
   state.q = $("q").value.trim(); state.shown = 20;
   if (remember) { rememberQuery(); closeSuggestions(); }
   render(); syncURL();
@@ -301,12 +304,20 @@ function commitSearch(remember = false) {
 $("q").addEventListener("input", () => {
   clearTimeout(searchTimer);
   $("clear-search").hidden = !$("q").value;
+  if (composing) return;
   searchTimer = setTimeout(() => commitSearch(), 160);
   showSuggestions();
+});
+$("q").addEventListener("compositionstart", () => {
+  composing = true; clearTimeout(searchTimer); closeSuggestions();
+});
+$("q").addEventListener("compositionend", () => {
+  composing = false; commitSearch(); showSuggestions();
 });
 $("q").addEventListener("focus", showSuggestions);
 $("q").addEventListener("blur", closeSuggestions);
 $("q").addEventListener("keydown", event => {
+  if (composing || event.isComposing || event.keyCode === 229) return;
   const options = [...$("suggestions").querySelectorAll('[role="option"]')];
   if (event.key === "ArrowDown" || event.key === "ArrowUp") {
     event.preventDefault();
@@ -332,7 +343,11 @@ $("days").addEventListener("change", event => changeFilters({ days: Number(event
 $("sort").addEventListener("change", event => changeFilters({ sort: event.target.value }));
 $("free-filter").addEventListener("click", () => changeFilters({ free: !state.free }));
 $("reset-filters").addEventListener("click", resetFilters);
-$("more").addEventListener("click", () => { state.shown += 20; render(); });
+$("more").addEventListener("click", () => {
+  const previousCount = $("competitions").querySelectorAll(".comp-card").length;
+  state.shown += 20; render();
+  $("competitions").querySelectorAll(".comp-card")[previousCount]?.focus();
+});
 $("theme-toggle").addEventListener("click", () => { theme = theme === "dark" ? "light" : "dark"; renderTheme(); rememberPreferences(); });
 function changeView(view) {
   clearTimeout(searchTimer);
