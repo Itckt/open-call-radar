@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import {
   parseCSV, toCompetitions, toSites, safeUrl, escapeHTML, deadlineMs, deadlineInfo,
   profileMatch, analyseQuery, queryScore, filterCompetitions, inCategory,
-  stableId, normaliseSaved, buildCalendar, prizeSummary
+  stableId, normaliseSaved, buildCalendar, prizeSummary, SCHOOLS
 } from "../radar-core.js";
 
 const NOW = Date.parse("2026-11-14T01:00:00Z");
@@ -89,6 +89,38 @@ test("Combined filtering excludes unknown fees, closed dates and other schools",
     record({ name: "未列明", fee: "" }), record({ name: "其他學校", school: "HKU" }),
     record({ name: "遲啲", deadline: "2026-12-30" })];
   assert.deepEqual(filterCompetitions(items, { q: "HKBU 免費 本週" }, NOW).map(item => item.id), [valid.id]);
+});
+
+test("Full school names and abbreviations return the same eligible opportunities", () => {
+  const open = record({ name: "公開機會" });
+  for (const [code, name] of Object.entries(SCHOOLS)) {
+    const own = record({ name: "校內機會", school: code });
+    const other = record({ name: "其他院校", school: code === "HKU" ? "HKBU" : "HKU" });
+    const items = [open, own, other];
+    assert.equal(analyseQuery(name + " 免費").profile, code);
+    assert.deepEqual(filterCompetitions(items, { q: name + " 免費" }, NOW),
+      filterCompetitions(items, { q: code + " 免費" }, NOW));
+    assert.equal(filterCompetitions(items, { q: name + " 免費" }, NOW).length, 2);
+  }
+});
+
+test("Spaced and simplified deadline phrases match the dropdown boundaries", () => {
+  const items = [record(), record({ name: "下月攝影", deadline: "2026-12-14" }),
+    record({ name: "較後攝影", deadline: "2027-01-20" })];
+  for (const [q, days] of [["攝影7日內", 7], ["攝影 30 日內", 30], ["攝影 90天内", 90]]) {
+    assert.equal(analyseQuery(q).days, days);
+    assert.deepEqual(filterCompetitions(items, { q }, NOW), filterCompetitions(items, { q: "攝影", days }, NOW));
+  }
+  assert.equal(analyseQuery("190 日內").days, 0);
+});
+
+test("English category keywords do not match substrings of unrelated words", () => {
+  const unrelated = record({ name: "Smart mobility prize", org: "", eligibility: "", prizeType: "" });
+  assert.equal(inCategory(unrelated, "art"), false);
+  assert.equal(inCategory({ ...unrelated, name: "Art prize" }, "art"), true);
+  assert.equal(inCategory({ ...unrelated, name: "Arts Award" }, "art"), true);
+  assert.equal(inCategory({ ...unrelated, name: "Wildlife Photographer of the Year" }, "photo"), true);
+  assert.equal(inCategory({ ...unrelated, name: "Animation Award" }, "film"), true);
 });
 test("Deadline ordering uses exact time, not just days remaining", () => {
   const late = record({ name: "Late", time: "18:00" });
